@@ -18,18 +18,20 @@ export class MissingSignatureError extends SignatureVerificationError {
   }
 }
 
-export function verifySignature(
-  data: Buffer,
-  signature: string,
-  publicKey: string
-): void {
+export function verifySignature(data: Buffer, signature: string, publicKey: string): void {
   const hashed = crypto.createHash('sha256').update(data).digest('hex');
+
+  if (!signature) {
+    throw new MissingSignatureError();
+  }
+
   try {
     if (crypto.verify('sha256', Buffer.from(hashed), publicKey, signature)) {
       return;
     }
-  } catch {
+  } catch (error) {
     throw new InvalidSignatureError();
   }
+
   throw new InvalidSignatureError();
 }
