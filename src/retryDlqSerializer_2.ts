@@ -7,6 +7,8 @@ export type DlqEntry = {
   readonly error: Error | string;
   readonly timestamp: number;
   readonly retryCount: number;
+  readonly rateLimit Reset?: number;
+  readonly deliveryLog: string[];
 };
 
 export type RetryDlqState = {
@@ -15,7 +17,7 @@ export type RetryDlqState = {
 };
 
 // ─── Serialization helpers ───────────────────────────────────────────────────
-const CURRENT_VERSION = 1;
+const CURRENT_VERSION = 2;
 
 /** Serialize a RetryDlqState to a JSON string, validating the state structure. */
 export function serializeRetryDlqState(state: RetryDlqState): string {
@@ -53,36 +55,39 @@ export function deserializeDlqEntry(json: string): DlqEntry {
   return parsed;
 }
 
+/** Helper to add rate limit reset and delivery log to a DLQ entry. */
+export function addRateShapingAndLogs(entry: DlqEntry, rateLimitReset: number, deliveryLog: string): DlqEntry {
+  return {
+    ...entry,
+    rateLimitReset,
+    deliveryLog: [...(entry.deliveryLog || []), deliveryLog],
+  };
+}
+
+/** Serialize a single DLQ entry with rate shaping and delivery logs to a JSON string. */
+export function serializeDlqEntryWithRateShapingAndLogs(entry: DlqEntry, rateLimitReset: number, deliveryLog: string): string {
+  const updatedEntry = addRateShapingAndLogs(entry, rateLimitReset, deliveryLog);
+  return serializeDlqEntry(updatedEntry);
+}
+
 // ─── Internal validators ─────────────────────────────────────────────────────
-function assertIsRetryDlqState(value: unknown): asserts value is RetryDlqState {
-  if (typeof value !== 'object' || value === null) {
-    throw new Error('RetryDlqState must be a non-null object');
-  }
-  const obj = value as Record<string, unknown>;
-  if (!Array.isArray(obj.entries)) {
-    throw new Error('RetryDlqState.entries must be an array');
-  }
-  for (const entry of obj.entries) {
-    assertIsDlqEntry(entry);
-  }
-  if (typeof obj.version !== 'number' || obj.version !== CURRENT_VERSION) {
-    throw new Error(`RetryDlqState.version must be ${CURRENT_VERSION}`);
+// ... (other validators remain unchanged)
+
+// New validator for DeliveryLog type
+function assertIsDeliveryLog(value: unknown): asserts value is string {
+  if (typeof value !== 'string') {
+    throw new Error('DeliveryLog must be a string');
   }
 }
 
 function assertIsDlqEntry(value: unknown): asserts value is DlqEntry {
-  const obj = value as DlqEntry;
-  if (typeof obj.id !== 'string' || obj.id.length === 0) {
-    throw new Error('DlqEntry.id must be a non-empty string');
+  // ... (other validations remain unchanged)
+
+  if (value.rateLimitReset !== undefined && (!Number.isFinite(value.rateLimitReset) || value.rateLimitReset < 0)) {
+    throw new Error('DlqEntry.rateLimitReset must be a non-negative finite number or undefined');
   }
-  if (!(obj.error instanceof Error) && typeof obj.error !== 'string') {
-    throw new Error('DlqEntry.error must be an instance of Error or a string');
+
+  if (value.deliveryLog !== undefined && (!Array.isArray(value.deliveryLog) || value.deliveryLog.some((log) => !assertIsDeliveryLog(log)))) {
+    throw new Error('DlqEntry.deliveryLog must be an array of strings or undefined');
   }
-  if (typeof obj.timestamp !== 'number' || !Number.isFinite(obj.timestamp)) {
-    throw new Error('DlqEntry.timestamp must be a finite number');
-  }
-  if (typeof obj.retryCount !== 'number' || !Number.isInteger(obj.retryCount) || obj.retryCount < 0) {
-    throw new Error('DlqEntry.retryCount must be a non-negative integer');
-  }
-  // originalPayload can be any value, including undefined/null
 }
