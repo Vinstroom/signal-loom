@@ -12,6 +12,15 @@ export interface RetryDlqEvent {
   eventType?: string;
 }
 
+export interface SchemaGuardStats {
+  totalChecked: number;
+  passed: number;
+  failed: number;
+  blocked: number;
+  lastFailureReason?: string;
+  lastBlockedPayloadId?: string;
+}
+
 export function formatRetryEvent(event: RetryDlqEvent): string {
   const { attempt, maxAttempts, elapsedTimeMs, dlqReason, originalError, payloadId, eventType } = event;
 
@@ -56,10 +65,42 @@ export function formatRetryStats(
   dlqEntries: number,
   avgRetryDelayMs: number
 ): string {
+  const successRate = totalAttempts > 0
+    ? `${((totalSuccess / totalAttempts) * 100).toFixed(1)}%`
+    : 'N/A';
+
   return `📊 Retry Statistics\n`
     + `  Total Attempts: ${totalAttempts}\n`
     + `  Total Failed: ${totalFailed}\n`
     + `  Total Success: ${totalSuccess}\n`
+    + `  Success Rate: ${successRate}\n`
     + `  DLQ Entries: ${dlqEntries}\n`
     + `  Avg Retry Delay: ${avgRetryDelayMs}ms`;
+}
+
+export function formatSchemaGuardStats(stats: SchemaGuardStats): string {
+  const { totalChecked, passed, failed, blocked, lastFailureReason, lastBlockedPayloadId } = stats;
+
+  const passRate = totalChecked > 0
+    ? `${((passed / totalChecked) * 100).toFixed(1)}%`
+    : 'N/A';
+
+  const lines: string[] = [
+    '🔍 Schema Guard Statistics',
+    `  Total Checked: ${totalChecked}`,
+    `  Passed: ${passed}`,
+    `  Failed: ${failed}`,
+    `  Blocked: ${blocked}`,
+    `  Pass Rate: ${passRate}`,
+  ];
+
+  if (lastFailureReason) {
+    lines.push(`  Last Failure Reason: ${lastFailureReason}`);
+  }
+
+  if (lastBlockedPayloadId) {
+    lines.push(`  Last Blocked Payload ID: ${lastBlockedPayloadId}`);
+  }
+
+  return lines.join('\n');
 }
