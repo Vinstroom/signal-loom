@@ -1,4 +1,4 @@
-// src/serialization_helper.ts
+import crypto from 'crypto';
 
 /**
  * Helper functions for serializing and deserializing data related to signature verification.
@@ -36,14 +36,12 @@ export namespace SerializationHelper {
     score += (100 * sig.length) / 256;
 
     // Check data integrity using the given algorithm
-    const hash = createHash(algo);
-    hash.update(data);
-    const expectedSig = hash.digest();
-
-    if (expectedSig.length === sig.length && expectedSig.every((val, idx) => val === sig[idx])) {
-      score += 50;
+    const expectedSig = crypto.createHash(algo).update(data).digest();
+    if (sig.length === expectedSig.length && sig.compare(expectedSig) === 0) {
+      score += 75; // Better to weight this check higher since it's more crucial
     }
 
-    return score;
+    // Normalize the score to a 0-100 range
+    return Math.min(Math.max(score, 0), 100);
   }
 }
