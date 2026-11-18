@@ -60,3 +60,15 @@ export function collectPayloadTransforms<T>(
   }
   return states;
 }
+
+/**
+ * Parses a payload for dead-letter queue (DLQ) retry information.
+ * If found, returns a new payload with the retry data attached.
+ * If not found, returns undefined to trigger a retry or DLQ operation.
+ */
+export function parseRetryInfoFromPayload<T>(payload: T): T | undefined {
+  if ('retry' in payload && typeof payload.retry === 'object' && 'attempts' in payload.retry && 'maxAttempts' in payload.retry) {
+    return { ...payload, retry: { ...payload.retry } };
+  }
+  return undefined;
+}
