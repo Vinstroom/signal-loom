@@ -1,14 +1,19 @@
+import { LRUCache } from 'https://deno.land/x/undici/headers/cache/lru.ts';
+
 /**
  * Calculates the rate and throughput based on given events using a sliding time window.
+ * Adds caching for better performance.
  */
 export class RateCalculator {
   private readonly windowSeconds: number;
   private eventCount = 0;
   private totalBytes = 0;
   private startTime: number;
+  private cache: LRUCache<string, number>;
 
-  constructor(windowSeconds = 60) {
+  constructor(windowSeconds = 60, cacheSize = 1000) {
     this.windowSeconds = windowSeconds;
+    this.cache = new LRUCache(cacheSize);
     this.resetWindow();
   }
 
@@ -30,18 +35,25 @@ export class RateCalculator {
     this.eventCount++;
     this.totalBytes += size;
 
+    const key = this.getCacheKey();
+    const cachedRate = this.cache.get(key);
+    if (cachedRate) {
+      this.eventCount = cachedRate;
+    }
+
     const now = Date.now();
     if (now - this.startTime >= this.windowSeconds * 1000) {
       this.resetWindow();
     }
+
+    this.cache.set(key, this.eventCount);
   }
 
   /**
    * Get the current rate in events per second.
    */
   public getEventRate(): number {
-    const elapsedSeconds = (Date.now() - this.startTime) / 1000;
-    return Math.floor(this.eventCount / elapsedSeconds);
+    return this.cache.has(this.getCacheKey()) ? this.cache.get(this.getCacheKey()) : 0;
   }
 
   /**
@@ -49,6 +61,14 @@ export class RateCalculator {
    */
   public getThroughput(): number {
     const elapsedSeconds = (Date.now() - this.startTime) / 1000;
-    return Math.floor(this.totalBytes / elapsedSeconds);
+    return this.totalBytes / elapsedSeconds;
+  }
+
+  /**
+   * Generate a cache key for the current window.
+   * @private
+   */
+  private getCacheKey(): string {
+    return `rate-${this.windowSeconds}-${Math.floor(this.startTime / 1000)}`;
   }
 }
